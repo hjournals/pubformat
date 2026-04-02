@@ -67,6 +67,62 @@ def upload():
         body_html = "<br><br>".join(body)
 
         return f"""
+<html>
+<head>
+    <title>Makale Önizleme</title>
+    <style>
+        body {{
+            font-family: Georgia, serif;
+            max-width: 800px;
+            margin: auto;
+            line-height: 1.6;
+        }}
+        h1 {{
+            text-align: center;
+            font-size: 28px;
+        }}
+        h3 {{
+            text-align: center;
+            font-weight: normal;
+        }}
+        h2 {{
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+        }}
+        .abstract {{
+            background: #f5f5f5;
+            padding: 10px;
+            border-left: 4px solid #333;
+        }}
+        .keywords {{
+            font-style: italic;
+            margin-top: 10px;
+        }}
+    </style>
+</head>
+
+<body>
+
+<h1>{title}</h1>
+<h3>{author}</h3>
+
+<hr>
+
+<h2>Abstract</h2>
+<div class="abstract">{abstract}</div>
+
+<div class="keywords">{keywords}</div>
+
+<hr>
+
+<div>{body_html}</div>
+
+<br><br>
+<a href="/">← Yeni dosya yükle</a>
+
+</body>
+</html>
+"""
         <html>
         <head>
             <title>Makale Önizleme</title>
