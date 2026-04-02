@@ -14,51 +14,224 @@ TEMPLATE_FILE = "holistic template.docx"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# -------------------------
-# HTML
-# -------------------------
 HTML_FORM = """
-<h2>Makale Sistemi</h2>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Makale Sistemi</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 30px auto;
+            line-height: 1.5;
+            padding: 20px;
+        }
+        h1, h2 {
+            margin-top: 24px;
+            margin-bottom: 12px;
+        }
+        label {
+            font-weight: bold;
+            display: block;
+            margin-top: 12px;
+            margin-bottom: 6px;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            margin-bottom: 12px;
+            font-size: 14px;
+        }
+        textarea {
+            min-height: 120px;
+        }
+        .section {
+            border: 1px solid #ddd;
+            padding: 18px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .hint {
+            font-size: 13px;
+            color: #555;
+            margin-top: -6px;
+            margin-bottom: 10px;
+        }
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 15px;
+            margin-bottom: 20px;
+        }
+        .checkbox-row input {
+            width: auto;
+            margin: 0;
+        }
+        button {
+            padding: 12px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
 
-<form method="POST" enctype="multipart/form-data">
+    <script>
+        function toggleLanguageFields() {
+            const lang = document.getElementById("language").value;
+            const trFields = document.querySelectorAll(".tr-field");
+            const trInputs = document.querySelectorAll(".tr-input");
 
-Başlık:<br>
-<input name="title"><br><br>
+            if (lang === "tr") {
+                trFields.forEach(el => el.style.display = "block");
+                trInputs.forEach(el => el.required = true);
+            } else {
+                trFields.forEach(el => el.style.display = "none");
+                trInputs.forEach(el => el.required = false);
+            }
+        }
 
-Abstract:<br>
-<textarea name="abstract"></textarea><br><br>
+        window.onload = function() {
+            toggleLanguageFields();
+        }
+    </script>
+</head>
+<body>
 
-Keywords:<br>
-<input name="keywords"><br><br>
+    <h1>Makale Başvuru Formu</h1>
 
-Body (.docx):<br>
-<input type="file" name="body_file"><br><br>
+    <form method="POST" enctype="multipart/form-data">
 
-Acknowledgements:<br>
-<textarea name="ack"></textarea><br><br>
+        <div class="section">
+            <h2>1. Makale Dili</h2>
 
-Funding:<br>
-<textarea name="funding"></textarea><br><br>
+            <label for="language">Makale Dili</label>
+            <select name="language" id="language" onchange="toggleLanguageFields()" required>
+                <option value="tr">Türkçe</option>
+                <option value="en">English</option>
+            </select>
+        </div>
 
-Conflict of Interest:<br>
-<textarea name="conflict"></textarea><br><br>
+        <div class="section">
+            <h2>2. Başlık Bilgileri</h2>
 
-References:<br>
-<textarea name="references"></textarea><br><br>
+            <div class="tr-field">
+                <label for="title_tr">Türkçe Başlık</label>
+                <input type="text" name="title_tr" id="title_tr" class="tr-input">
+            </div>
 
-<input type="checkbox" name="blind"> Kör hakem<br><br>
+            <label for="title_en">English Title</label>
+            <input type="text" name="title_en" id="title_en" required>
+        </div>
 
-<button>Oluştur</button>
+        <div class="section">
+            <h2>3. Özet Bilgileri</h2>
 
-</form>
+            <div class="tr-field">
+                <label for="abstract_tr">Türkçe Özet</label>
+                <textarea name="abstract_tr" id="abstract_tr" class="tr-input"></textarea>
+            </div>
+
+            <label for="abstract_en">Abstract</label>
+            <textarea name="abstract_en" id="abstract_en" required></textarea>
+        </div>
+
+        <div class="section">
+            <h2>4. Anahtar Kelimeler</h2>
+
+            <div class="tr-field">
+                <label for="keywords_tr">Türkçe Anahtar Kelimeler</label>
+                <input type="text" name="keywords_tr" id="keywords_tr" class="tr-input">
+            </div>
+
+            <label for="keywords_en">Keywords</label>
+            <input type="text" name="keywords_en" id="keywords_en" required>
+
+            <div class="hint">
+                Anahtar kelimeleri virgülle ayırarak yazın.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>5. Ana Metin Dosyası</h2>
+
+            <label for="body_file">Makale Ana Metni (.docx)</label>
+            <input type="file" name="body_file" id="body_file" accept=".docx" required>
+
+            <div class="hint">
+                Ana metni Word (.docx) dosyası olarak yükleyin.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>6. Ek Beyanlar</h2>
+
+            <label for="ack">Acknowledgements</label>
+            <textarea name="ack" id="ack"></textarea>
+
+            <label for="funding">Funding</label>
+            <textarea name="funding" id="funding"></textarea>
+
+            <label for="conflict">Conflict of Interest</label>
+            <textarea name="conflict" id="conflict"></textarea>
+        </div>
+
+        <div class="section">
+            <h2>7. References</h2>
+
+            <label for="references">References</label>
+            <textarea name="references" id="references" required></textarea>
+
+            <div class="hint">
+                Tüm kaynakçayı toplu olarak yapıştırın. Her referansı ayrı satıra yazın.
+                APA içeriğini yazar hazırlamalıdır; sistem yalnızca Word içinde düzen uygular.
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>8. Kör Hakemlik</h2>
+
+            <div class="checkbox-row">
+                <input type="checkbox" name="blind" id="blind">
+                <label for="blind" style="margin:0; font-weight:normal;">Kör hakem sürümü üret</label>
+            </div>
+        </div>
+
+        <button type="submit">Word Oluştur</button>
+
+    </form>
+
+</body>
+</html>
 """
 
-# -------------------------
-# BODY EKLEME (OLDUĞU GİBİ)
-# -------------------------
+RESULT_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Dosya Hazır</title>
+</head>
+<body style="font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto;">
+    <h2>Word dosyası hazır</h2>
+    <p><a href="/download/{{ filename }}">Dosyayı indir</a></p>
+    <p><a href="/">Yeni makale oluştur</a></p>
+</body>
+</html>
+"""
+
 def append_body(target_doc, source_doc):
     for para in source_doc.paragraphs:
         new_p = target_doc.add_paragraph()
+
+        try:
+            if para.style and para.style.name:
+                new_p.style = para.style.name
+        except Exception:
+            pass
 
         for run in para.runs:
             new_run = new_p.add_run(run.text)
@@ -66,112 +239,147 @@ def append_body(target_doc, source_doc):
             new_run.italic = run.italic
             new_run.underline = run.underline
 
+            if run.font.name:
+                new_run.font.name = run.font.name
+            if run.font.size:
+                new_run.font.size = run.font.size
+
         new_p.alignment = para.alignment
 
-# -------------------------
-# REFERENCES FORMAT
-# -------------------------
-def add_references(doc, text):
-    lines = [l.strip() for l in text.split("\n") if l.strip()]
+        src_fmt = para.paragraph_format
+        dst_fmt = new_p.paragraph_format
+        dst_fmt.left_indent = src_fmt.left_indent
+        dst_fmt.right_indent = src_fmt.right_indent
+        dst_fmt.first_line_indent = src_fmt.first_line_indent
+        dst_fmt.space_before = src_fmt.space_before
+        dst_fmt.space_after = src_fmt.space_after
+        dst_fmt.line_spacing = src_fmt.line_spacing
+        dst_fmt.line_spacing_rule = src_fmt.line_spacing_rule
 
-    for line in lines:
-        p = doc.add_paragraph(line)
-        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+def clean_reference_lines(text):
+    lines = [line.strip() for line in text.splitlines()]
+    return [line for line in lines if line]
 
-        fmt = p.paragraph_format
-        fmt.left_indent = Cm(1)
-        fmt.first_line_indent = Cm(-1)
-        fmt.space_before = Pt(6)
-        fmt.space_after = Pt(6)
+def add_heading(doc, text):
+    p = doc.add_paragraph()
+    run = p.add_run(text)
+    run.bold = True
+    run.font.size = Pt(12)
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-# -------------------------
-# ROUTE
-# -------------------------
+def add_normal_paragraph(doc, text):
+    p = doc.add_paragraph(text)
+    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    return p
+
+def add_reference_paragraph(doc, text):
+    p = doc.add_paragraph(text)
+    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    fmt = p.paragraph_format
+    fmt.left_indent = Cm(1)
+    fmt.first_line_indent = Cm(-1)
+    fmt.space_before = Pt(6)
+    fmt.space_after = Pt(6)
+    fmt.line_spacing = 1
+    return p
+
 @app.route("/", methods=["GET", "POST"])
 def index():
-
     if request.method == "POST":
         try:
-            title = request.form.get("title")
-            abstract = request.form.get("abstract")
-            keywords = request.form.get("keywords")
-            ack = request.form.get("ack")
-            funding = request.form.get("funding")
-            conflict = request.form.get("conflict")
-            references = request.form.get("references")
+            language = request.form.get("language", "").strip()
+
+            title_tr = request.form.get("title_tr", "").strip()
+            title_en = request.form.get("title_en", "").strip()
+
+            abstract_tr = request.form.get("abstract_tr", "").strip()
+            abstract_en = request.form.get("abstract_en", "").strip()
+
+            keywords_tr = request.form.get("keywords_tr", "").strip()
+            keywords_en = request.form.get("keywords_en", "").strip()
+
+            ack = request.form.get("ack", "").strip()
+            funding = request.form.get("funding", "").strip()
+            conflict = request.form.get("conflict", "").strip()
+            references = request.form.get("references", "").strip()
+
+            if language not in ["tr", "en"]:
+                return "Makale dili geçersiz."
+
+            if language == "tr":
+                if not title_tr or not abstract_tr or not keywords_tr:
+                    return "Türkçe makalelerde Türkçe başlık, özet ve anahtar kelimeler zorunludur."
+                if not title_en or not abstract_en or not keywords_en:
+                    return "Türkçe makalelerde İngilizce başlık, abstract ve keywords de zorunludur."
+
+            if language == "en":
+                if not title_en or not abstract_en or not keywords_en:
+                    return "İngilizce makalelerde English Title, Abstract ve Keywords zorunludur."
 
             author_block = "Anonymous Author(s)" if request.form.get("blind") else ""
 
-            # BODY FILE
-            file = request.files["body_file"]
-            filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-            file.save(filepath)
+            body_file = request.files.get("body_file")
+            if not body_file or not body_file.filename.lower().endswith(".docx"):
+                return "Lütfen body için .docx dosyası yükleyin."
 
-            # TEMPLATE RENDER
-            doc = DocxTemplate(TEMPLATE_FILE)
-
-            context = {
-                "title": title,
-                "author_block": author_block,
-                "abstract": abstract,
-                "keywords": keywords,
-            }
+            body_path = os.path.join(UPLOAD_FOLDER, body_file.filename)
+            body_file.save(body_path)
 
             output_file = "final.docx"
             output_path = os.path.join(OUTPUT_FOLDER, output_file)
 
-            doc.render(context)
-            doc.save(output_path)
+            tpl = DocxTemplate(TEMPLATE_FILE)
 
-            # FINAL DOC AÇ
+            context = {
+                "language": language,
+                "title_tr": title_tr,
+                "title_en": title_en,
+                "author_block": author_block,
+                "abstract_tr": abstract_tr,
+                "abstract_en": abstract_en,
+                "keywords_tr": keywords_tr,
+                "keywords_en": keywords_en,
+            }
+
+            tpl.render(context)
+            tpl.save(output_path)
+
             final_doc = Document(output_path)
 
-            # BODY EKLE
             final_doc.add_page_break()
-            body_doc = Document(filepath)
+            body_doc = Document(body_path)
             append_body(final_doc, body_doc)
 
-            # ACKNOWLEDGEMENTS
-            final_doc.add_paragraph()
-            p = final_doc.add_paragraph("Acknowledgements")
-            p.runs[0].bold = True
-            final_doc.add_paragraph(ack)
+            if ack:
+                final_doc.add_paragraph()
+                add_heading(final_doc, "Acknowledgements")
+                add_normal_paragraph(final_doc, ack)
 
-            # FUNDING
-            p = final_doc.add_paragraph("Funding")
-            p.runs[0].bold = True
-            final_doc.add_paragraph(funding)
+            if funding:
+                add_heading(final_doc, "Funding")
+                add_normal_paragraph(final_doc, funding)
 
-            # CONFLICT
-            p = final_doc.add_paragraph("Conflict of Interest")
-            p.runs[0].bold = True
-            final_doc.add_paragraph(conflict)
+            if conflict:
+                add_heading(final_doc, "Conflict of Interest")
+                add_normal_paragraph(final_doc, conflict)
 
-            # REFERENCES
-            p = final_doc.add_paragraph("REFERENCES")
-            p.runs[0].bold = True
-            add_references(final_doc, references)
+            add_heading(final_doc, "REFERENCES")
+            for line in clean_reference_lines(references):
+                add_reference_paragraph(final_doc, line)
 
-            # SAVE
             final_doc.save(output_path)
 
-            return f'<a href="/download/{output_file}">İndir</a>'
+            return render_template_string(RESULT_HTML, filename=output_file)
 
         except Exception as e:
             return f"HATA: {str(e)}"
 
-    return HTML_FORM
+    return render_template_string(HTML_FORM)
 
-# -------------------------
-# DOWNLOAD
-# -------------------------
 @app.route("/download/<filename>")
 def download(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
-# -------------------------
-# RUN
-# -------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
