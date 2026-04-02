@@ -14,88 +14,51 @@ TEMPLATE_FILE = "holistic template.docx"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+# -------------------------
+# HTML
+# -------------------------
 HTML_FORM = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Makale Sistemi</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto; line-height: 1.5; }
-        input, textarea { width: 100%; padding: 8px; margin-top: 4px; margin-bottom: 16px; box-sizing: border-box; }
-        textarea { min-height: 120px; }
-        button { padding: 10px 18px; font-size: 16px; }
-    </style>
-</head>
-<body>
-    <h1>Makale Oluştur</h1>
+<h2>Makale Sistemi</h2>
 
-    <form method="POST" enctype="multipart/form-data">
-        <label>Makale Başlığı</label>
-        <input type="text" name="title" required>
+<form method="POST" enctype="multipart/form-data">
 
-        <label>Abstract</label>
-        <textarea name="abstract" required></textarea>
+Başlık:<br>
+<input name="title"><br><br>
 
-        <label>Keywords</label>
-        <input type="text" name="keywords" required>
+Abstract:<br>
+<textarea name="abstract"></textarea><br><br>
 
-        <label>Body (.docx)</label>
-        <input type="file" name="body_file" accept=".docx" required>
+Keywords:<br>
+<input name="keywords"><br><br>
 
-        <label>Acknowledgements</label>
-        <textarea name="acknowledgements"></textarea>
+Body (.docx):<br>
+<input type="file" name="body_file"><br><br>
 
-        <label>Funding</label>
-        <textarea name="funding"></textarea>
+Acknowledgements:<br>
+<textarea name="ack"></textarea><br><br>
 
-        <label>Conflict of Interest</label>
-        <textarea name="conflict_of_interest"></textarea>
+Funding:<br>
+<textarea name="funding"></textarea><br><br>
 
-        <label>References (her kaynağı ayrı satıra yapıştırın)</label>
-        <textarea name="references_text" required></textarea>
+Conflict of Interest:<br>
+<textarea name="conflict"></textarea><br><br>
 
-        <label>
-            <input type="checkbox" name="blind_review" value="yes">
-            Kör hakem sürümü üret
-        </label>
+References:<br>
+<textarea name="references"></textarea><br><br>
 
-        <br><br>
-        <button type="submit">Word Oluştur</button>
-    </form>
-</body>
-</html>
+<input type="checkbox" name="blind"> Kör hakem<br><br>
+
+<button>Oluştur</button>
+
+</form>
 """
 
-RESULT_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Dosya Hazır</title>
-</head>
-<body style="font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto;">
-    <h2>Word dosyası hazır</h2>
-    <p><a href="/download/{{ filename }}">Dosyayı indir</a></p>
-    <p><a href="/">Yeni makale oluştur</a></p>
-</body>
-</html>
-"""
-
-def clean_reference_lines(text: str):
-    lines = [line.strip() for line in text.splitlines()]
-    return [line for line in lines if line]
-
-def append_docx_content(target_doc, source_doc):
+# -------------------------
+# BODY EKLEME (OLDUĞU GİBİ)
+# -------------------------
+def append_body(target_doc, source_doc):
     for para in source_doc.paragraphs:
         new_p = target_doc.add_paragraph()
-
-        # Stil adı varsa taşımayı dene
-        try:
-            if para.style and para.style.name:
-                new_p.style = para.style.name
-        except Exception:
-            pass
 
         for run in para.runs:
             new_run = new_p.add_run(run.text)
@@ -103,68 +66,50 @@ def append_docx_content(target_doc, source_doc):
             new_run.italic = run.italic
             new_run.underline = run.underline
 
-            if run.font.name:
-                new_run.font.name = run.font.name
-            if run.font.size:
-                new_run.font.size = run.font.size
-
         new_p.alignment = para.alignment
 
-        src_fmt = para.paragraph_format
-        dst_fmt = new_p.paragraph_format
-        dst_fmt.left_indent = src_fmt.left_indent
-        dst_fmt.right_indent = src_fmt.right_indent
-        dst_fmt.first_line_indent = src_fmt.first_line_indent
-        dst_fmt.space_before = src_fmt.space_before
-        dst_fmt.space_after = src_fmt.space_after
-        dst_fmt.line_spacing = src_fmt.line_spacing
-        dst_fmt.line_spacing_rule = src_fmt.line_spacing_rule
+# -------------------------
+# REFERENCES FORMAT
+# -------------------------
+def add_references(doc, text):
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
 
-def add_section_heading(doc, text):
-    p = doc.add_paragraph()
-    p.style = "Heading 1"
-    p.add_run(text)
+    for line in lines:
+        p = doc.add_paragraph(line)
+        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
 
-def add_normal_paragraph(doc, text):
-    p = doc.add_paragraph(text)
-    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    return p
+        fmt = p.paragraph_format
+        fmt.left_indent = Cm(1)
+        fmt.first_line_indent = Cm(-1)
+        fmt.space_before = Pt(6)
+        fmt.space_after = Pt(6)
 
-def add_reference_paragraph(doc, text):
-    p = doc.add_paragraph(text)
-    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    fmt = p.paragraph_format
-    fmt.left_indent = Cm(1)
-    fmt.first_line_indent = Cm(-1)
-    fmt.space_before = Pt(6)
-    fmt.space_after = Pt(6)
-    fmt.line_spacing = 1
-    return p
-
+# -------------------------
+# ROUTE
+# -------------------------
 @app.route("/", methods=["GET", "POST"])
 def index():
+
     if request.method == "POST":
         try:
-            title = request.form.get("title", "").strip()
-            abstract = request.form.get("abstract", "").strip()
-            keywords = request.form.get("keywords", "").strip()
-            acknowledgements = request.form.get("acknowledgements", "").strip()
-            funding = request.form.get("funding", "").strip()
-            conflict_of_interest = request.form.get("conflict_of_interest", "").strip()
-            references_text = request.form.get("references_text", "").strip()
-            blind_review = request.form.get("blind_review")
+            title = request.form.get("title")
+            abstract = request.form.get("abstract")
+            keywords = request.form.get("keywords")
+            ack = request.form.get("ack")
+            funding = request.form.get("funding")
+            conflict = request.form.get("conflict")
+            references = request.form.get("references")
 
-            author_block = "Anonymous Author(s)" if blind_review == "yes" else ""
+            author_block = "Anonymous Author(s)" if request.form.get("blind") else ""
 
-            body_file = request.files.get("body_file")
-            if not body_file or not body_file.filename.lower().endswith(".docx"):
-                return "Lütfen body için .docx dosyası yükleyin."
+            # BODY FILE
+            file = request.files["body_file"]
+            filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+            file.save(filepath)
 
-            body_path = os.path.join(UPLOAD_FOLDER, body_file.filename)
-            body_file.save(body_path)
+            # TEMPLATE RENDER
+            doc = DocxTemplate(TEMPLATE_FILE)
 
-            # 1) Şablonu doldur
-            tpl = DocxTemplate(TEMPLATE_FILE)
             context = {
                 "title": title,
                 "author_block": author_block,
@@ -172,54 +117,61 @@ def index():
                 "keywords": keywords,
             }
 
-            output_filename = "final_article.docx"
-            output_path = os.path.join(OUTPUT_FOLDER, output_filename)
+            output_file = "final.docx"
+            output_path = os.path.join(OUTPUT_FOLDER, output_file)
 
-            tpl.render(context)
-            tpl.save(output_path)
+            doc.render(context)
+            doc.save(output_path)
 
-            # 2) Oluşan belgeyi aç
+            # FINAL DOC AÇ
             final_doc = Document(output_path)
 
-            # 3) Body'yi olduğu gibi sona ekle
+            # BODY EKLE
             final_doc.add_page_break()
-            body_doc = Document(body_path)
-            append_docx_content(final_doc, body_doc)
+            body_doc = Document(filepath)
+            append_body(final_doc, body_doc)
 
-            # 4) Acknowledgements
-            if acknowledgements:
-                add_section_heading(final_doc, "Acknowledgements")
-                add_normal_paragraph(final_doc, acknowledgements)
+            # ACKNOWLEDGEMENTS
+            final_doc.add_paragraph()
+            p = final_doc.add_paragraph("Acknowledgements")
+            p.runs[0].bold = True
+            final_doc.add_paragraph(ack)
 
-            # 5) Funding
-            if funding:
-                add_section_heading(final_doc, "Funding")
-                add_normal_paragraph(final_doc, funding)
+            # FUNDING
+            p = final_doc.add_paragraph("Funding")
+            p.runs[0].bold = True
+            final_doc.add_paragraph(funding)
 
-            # 6) Conflict of Interest
-            if conflict_of_interest:
-                add_section_heading(final_doc, "Conflict of Interest")
-                add_normal_paragraph(final_doc, conflict_of_interest)
+            # CONFLICT
+            p = final_doc.add_paragraph("Conflict of Interest")
+            p.runs[0].bold = True
+            final_doc.add_paragraph(conflict)
 
-            # 7) References
-            add_section_heading(final_doc, "REFERENCES")
-            for line in clean_reference_lines(references_text):
-                add_reference_paragraph(final_doc, line)
+            # REFERENCES
+            p = final_doc.add_paragraph("REFERENCES")
+            p.runs[0].bold = True
+            add_references(final_doc, references)
 
-            # 8) Kaydet
+            # SAVE
             final_doc.save(output_path)
 
-            return render_template_string(RESULT_HTML, filename=output_filename)
+            return f'<a href="/download/{output_file}">İndir</a>'
 
         except Exception as e:
-            return f"Hata oluştu: {str(e)}"
+            return f"HATA: {str(e)}"
 
-    return render_template_string(HTML_FORM)
+    return HTML_FORM
 
+# -------------------------
+# DOWNLOAD
+# -------------------------
 @app.route("/download/<filename>")
-def download_file(filename):
+def download(filename):
     return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
+# -------------------------
+# RUN
+# -------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
