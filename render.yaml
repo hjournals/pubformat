@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: pubformat
+    env: python
+    buildCommand: ""
+    startCommand: "python app.py"
