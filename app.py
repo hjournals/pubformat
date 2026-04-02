@@ -4,7 +4,6 @@ from docx import Document
 
 app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 HTML_FORM = """
@@ -26,61 +25,66 @@ HTML_FORM = """
 @app.route("/", methods=["GET", "POST"])
 def upload():
     if request.method == "POST":
-        file = request.files["file"]
-        if file and file.filename.endswith(".docx"):
-            filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-            file.save(filepath)
+        file = request.files.get("file")
 
-            doc = Document(filepath)
-paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+        if not file:
+            return "Dosya seçilmedi."
 
-title = paragraphs[0] if len(paragraphs) > 0 else ""
-author = paragraphs[1] if len(paragraphs) > 1 else ""
+        if not file.filename.lower().endswith(".docx"):
+            return "Lütfen .docx dosyası yükleyin."
 
-abstract = ""
-body = []
-keywords = ""
+        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filepath)
 
-in_abstract = False
+        doc = Document(filepath)
+        paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
 
-for p in paragraphs:
-    if "abstract" in p.lower():
-        in_abstract = True
-        continue
+        title = paragraphs[0] if len(paragraphs) > 0 else ""
+        author = paragraphs[1] if len(paragraphs) > 1 else ""
 
-    if "keywords" in p.lower():
+        abstract = ""
+        keywords = ""
+        body = []
         in_abstract = False
-        keywords = p
-        continue
 
-    if in_abstract:
-        abstract += p + " "
-    else:
-        body.append(p)
+        for p in paragraphs[2:]:
+            lower_p = p.lower()
 
-body_html = "<br><br>".join(body)
+            if "abstract" in lower_p:
+                in_abstract = True
+                continue
 
-return f"""
-<h1>{title}</h1>
-<h3>{author}</h3>
+            if "keywords" in lower_p:
+                in_abstract = False
+                keywords = p
+                continue
 
-<h2>Abstract</h2>
-<p>{abstract}</p>
+            if in_abstract:
+                abstract += p + " "
+            else:
+                body.append(p)
 
-<h3>{keywords}</h3>
+        body_html = "<br><br>".join(body)
 
-<hr>
-
-<div>{body_html}</div>
-"""
-
-            return f"""
-            <h2>Dosya okundu: {file.filename}</h2>
+        return f"""
+        <html>
+        <head>
+            <title>Makale Önizleme</title>
+        </head>
+        <body>
+            <h1>{title}</h1>
+            <h3>{author}</h3>
             <hr>
-            <div>{content}</div>
-            """
-
-        return "Lütfen .docx dosyası yükleyin."
+            <h2>Abstract</h2>
+            <p>{abstract}</p>
+            <h3>{keywords}</h3>
+            <hr>
+            <div>{body_html}</div>
+            <br><br>
+            <a href="/">Yeni dosya yükle</a>
+        </body>
+        </html>
+        """
 
     return render_template_string(HTML_FORM)
 
