@@ -1,5 +1,6 @@
 from flask import Flask, request, render_template_string
 import os
+from docx import Document
 
 app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
@@ -26,10 +27,22 @@ HTML_FORM = """
 def upload():
     if request.method == "POST":
         file = request.files["file"]
-        if file:
+        if file and file.filename.endswith(".docx"):
             filepath = os.path.join(UPLOAD_FOLDER, file.filename)
             file.save(filepath)
-            return f"Dosya yüklendi: {file.filename}"
+
+            doc = Document(filepath)
+            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+            content = "<br><br>".join(paragraphs)
+
+            return f"""
+            <h2>Dosya okundu: {file.filename}</h2>
+            <hr>
+            <div>{content}</div>
+            """
+
+        return "Lütfen .docx dosyası yükleyin."
+
     return render_template_string(HTML_FORM)
 
 if __name__ == "__main__":
