@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 
 UPLOAD_FOLDER = "outputs"
-TEMPLATE_FILE = "template.docx"
+TEMPLATE_FILE = "holistic template.docx"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
