@@ -1,121 +1,145 @@
 from flask import Flask, request, render_template_string, send_from_directory
 from docxtpl import DocxTemplate
+from docx import Document
 import os
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = "outputs"
+UPLOAD_FOLDER = "uploads"
+OUTPUT_FOLDER = "outputs"
 TEMPLATE_FILE = "holistic template.docx"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-HTML_FORM = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Makale Oluştur</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 900px;
-            margin: 30px auto;
-            line-height: 1.5;
-        }
-        input, textarea {
-            width: 100%;
-            padding: 8px;
-            margin-top: 4px;
-            margin-bottom: 16px;
-            box-sizing: border-box;
-        }
-        textarea {
-            min-height: 120px;
-        }
-        button {
-            padding: 10px 18px;
-            font-size: 16px;
-        }
-        h1 {
-            margin-bottom: 24px;
-        }
-    </style>
-</head>
-<body>
-    <h1>Makale Oluştur</h1>
+# -------------------------
+# APA FORMAT
+# -------------------------
+def format_apa(refs):
+    formatted = []
 
-    <form method="POST">
-        <label>Makale Başlığı</label>
-        <input type="text" name="title" required>
+    for r in refs:
+        if r["type"] == "article":
+            apa = f'{r["author"]} ({r["year"]}). {r["title"]}. {r["journal"]}, {r["volume"]}({r["issue"]}), {r["pages"]}.'
+        elif r["type"] == "book":
+            apa = f'{r["author"]} ({r["year"]}). {r["title"]}. {r["publisher"]}.'
+        else:
+            apa = r["title"]
 
-        <label>Yazar Bloğu</label>
-        <textarea name="author_block" placeholder="Kör hakemlik için boş bırakabilir veya Anonymous Author(s) yazdırabiliriz."></textarea>
+        formatted.append(apa)
 
-        <label>Abstract</label>
-        <textarea name="abstract" required></textarea>
+    return "\n".join(formatted)
 
-        <label>Keywords</label>
-        <input type="text" name="keywords" required>
+# -------------------------
+# WORD BODY OKUMA
+# -------------------------
+def read_docx(file_path):
+    doc = Document(file_path)
+    text = []
+    for para in doc.paragraphs:
+        text.append(para.text)
+    return "\n".join(text)
 
-        <label>Body</label>
-        <textarea name="body" required placeholder="Yazar ana metni buraya yapıştıracak. Başlıklar da bunun içinde olabilir."></textarea>
+# -------------------------
+# FORM HTML
+# -------------------------
+HTML = """
+<h2>Makale Sistemi</h2>
 
-        <label>Acknowledgements</label>
-        <textarea name="acknowledgements"></textarea>
+<form method="POST" enctype="multipart/form-data">
 
-        <label>Funding</label>
-        <textarea name="funding"></textarea>
+Başlık:<br>
+<input name="title"><br><br>
 
-        <label>Conflict of Interest</label>
-        <textarea name="conflict_of_interest"></textarea>
+Abstract:<br>
+<textarea name="abstract"></textarea><br><br>
 
-        <label>References</label>
-        <textarea name="references" required></textarea>
+Keywords:<br>
+<input name="keywords"><br><br>
 
-        <label>
-            <input type="checkbox" name="blind_review" value="yes">
-            Kör hakem sürümü üret
-        </label>
+Body (Word yükle):<br>
+<input type="file" name="body_file"><br><br>
 
-        <br><br>
-        <button type="submit">Word Oluştur</button>
-    </form>
-</body>
-</html>
+Acknowledgements:<br>
+<textarea name="ack"></textarea><br><br>
+
+Funding:<br>
+<textarea name="funding"></textarea><br><br>
+
+Conflict:<br>
+<textarea name="conflict"></textarea><br><br>
+
+<h3>Referans (1 adet örnek)</h3>
+
+Tür:
+<select name="ref_type">
+<option value="article">Makale</option>
+<option value="book">Kitap</option>
+</select><br>
+
+Yazar:<input name="ref_author"><br>
+Yıl:<input name="ref_year"><br>
+Başlık:<input name="ref_title"><br>
+Dergi:<input name="ref_journal"><br>
+Cilt:<input name="ref_volume"><br>
+Sayı:<input name="ref_issue"><br>
+Sayfa:<input name="ref_pages"><br>
+Yayıncı:<input name="ref_publisher"><br><br>
+
+<input type="checkbox" name="blind"> Kör hakem<br><br>
+
+<button>Oluştur</button>
+
+</form>
 """
 
-RESULT_HTML = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Dosya Hazır</title>
-</head>
-<body style="font-family: Arial, sans-serif; max-width: 900px; margin: 30px auto;">
-    <h2>Word dosyası hazır</h2>
-    <p><a href="/download/{{ filename }}">Dosyayı indir</a></p>
-    <p><a href="/">Yeni makale oluştur</a></p>
-</body>
-</html>
-"""
-
+# -------------------------
+# ROUTE
+# -------------------------
 @app.route("/", methods=["GET", "POST"])
 def index():
+
     if request.method == "POST":
-        title = request.form.get("title", "").strip()
-        author_block = request.form.get("author_block", "").strip()
-        abstract = request.form.get("abstract", "").strip()
-        keywords = request.form.get("keywords", "").strip()
-        body = request.form.get("body", "").strip()
-        acknowledgements = request.form.get("acknowledgements", "").strip()
-        funding = request.form.get("funding", "").strip()
-        conflict_of_interest = request.form.get("conflict_of_interest", "").strip()
-        references = request.form.get("references", "").strip()
-        blind_review = request.form.get("blind_review")
 
-        if blind_review == "yes":
-            author_block = "Anonymous Author(s)"
+        title = request.form.get("title")
+        abstract = request.form.get("abstract")
+        keywords = request.form.get("keywords")
+        ack = request.form.get("ack")
+        funding = request.form.get("funding")
+        conflict = request.form.get("conflict")
 
+        # Kör hakem
+        author_block = "Anonymous Author(s)" if request.form.get("blind") else ""
+
+        # -------------------------
+        # WORD BODY
+        # -------------------------
+        file = request.files["body_file"]
+        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filepath)
+
+        body = read_docx(filepath)
+
+        # -------------------------
+        # REFERENCES (STRUCTURED)
+        # -------------------------
+        ref = {
+            "type": request.form.get("ref_type"),
+            "author": request.form.get("ref_author"),
+            "year": request.form.get("ref_year"),
+            "title": request.form.get("ref_title"),
+            "journal": request.form.get("ref_journal"),
+            "volume": request.form.get("ref_volume"),
+            "issue": request.form.get("ref_issue"),
+            "pages": request.form.get("ref_pages"),
+            "publisher": request.form.get("ref_publisher"),
+        }
+
+        references = format_apa([ref])
+
+        # -------------------------
+        # TEMPLATE
+        # -------------------------
         doc = DocxTemplate(TEMPLATE_FILE)
 
         context = {
@@ -124,26 +148,34 @@ def index():
             "abstract": abstract,
             "keywords": keywords,
             "body": body,
-            "acknowledgements": acknowledgements,
+            "acknowledgements": ack,
             "funding": funding,
-            "conflict_of_interest": conflict_of_interest,
-            "references": references,
+            "conflict_of_interest": conflict,
+            "references": references
         }
 
         doc.render(context)
 
-        filename = "generated_article.docx"
-        output_path = os.path.join(UPLOAD_FOLDER, filename)
+        output_file = "final.docx"
+        output_path = os.path.join(OUTPUT_FOLDER, output_file)
         doc.save(output_path)
 
-        return render_template_string(RESULT_HTML, filename=filename)
+        return f'<a href="/download/{output_file}">DOSYAYI İNDİR</a>'
 
-    return render_template_string(HTML_FORM)
+    return HTML
 
+
+# -------------------------
+# DOWNLOAD
+# -------------------------
 @app.route("/download/<filename>")
-def download_file(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
+def download(filename):
+    return send_from_directory(OUTPUT_FOLDER, filename, as_attachment=True)
 
+
+# -------------------------
+# RUN
+# -------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
