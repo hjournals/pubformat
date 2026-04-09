@@ -11,10 +11,6 @@ app = Flask(__name__)
 
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "outputs"
-
-# ÖNEMLİ:
-# template.dotx yerine Word'de açıp .docx olarak kaydetmen daha güvenlidir.
-# Örneğin dosya adını "template.docx" yap.
 TEMPLATE_FILE = "TEMPLATE.docx"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -131,6 +127,10 @@ HTML_FORM = """
 
             <label for="title_en">English Title</label>
             <input type="text" name="title_en" id="title_en" required>
+
+            <div class="hint">
+                Başlığı özel isimler hariç yalnızca ilk harf büyük olacak şekilde girin.
+            </div>
         </div>
 
         <div class="section">
@@ -229,8 +229,11 @@ RESULT_HTML = """
 </html>
 """
 
-def set_run_font(run, font_name="Times New Roman", font_size=None, bold=None, italic=None):
+def set_run_font(run, font_name="Times New Roman", font_size=None, bold=None, italic=None, underline=None):
     run.font.name = font_name
+    if run._element.rPr is None:
+        run._element.get_or_add_rPr()
+
     run._element.rPr.rFonts.set(qn("w:ascii"), font_name)
     run._element.rPr.rFonts.set(qn("w:hAnsi"), font_name)
     run._element.rPr.rFonts.set(qn("w:eastAsia"), font_name)
@@ -242,6 +245,16 @@ def set_run_font(run, font_name="Times New Roman", font_size=None, bold=None, it
         run.bold = bold
     if italic is not None:
         run.italic = italic
+    if underline is not None:
+        run.underline = underline
+
+def all_paragraphs_in_document(doc):
+    paragraphs = list(doc.paragraphs)
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                paragraphs.extend(cell.paragraphs)
+    return paragraphs
 
 def format_article_title_paragraph(paragraph):
     paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -260,32 +273,55 @@ def format_article_title_paragraph(paragraph):
         return
 
     for run in paragraph.runs:
-        set_run_font(run, font_name="Times New Roman", font_size=16, bold=True)
+        set_run_font(
+            run,
+            font_name="Times New Roman",
+            font_size=16,
+            bold=True,
+            italic=False,
+            underline=False
+        )
 
 def fix_template_title(doc, article_title):
-    """
-    Yeni template'te başlık paragrafı Article Name / ArticleName stiliyle geliyor.
-    Önce stile göre bulur, gerekirse metne göre eşleştirir.
-    """
     normalized_title = (article_title or "").strip()
+    paragraphs = all_paragraphs_in_document(doc)
 
-    # 1) Önce stile göre yakala
-    for para in doc.paragraphs:
+    # 1) Önce bilinen başlık stilleriyle yakala
+    known_title_styles = {
+        "articlename",
+        "article name",
+        "title",
+        "makalebaşlığı",
+        "makale başlığı"
+    }
+
+    for para in paragraphs:
         style_name = ""
         try:
-            if para.style:
-                style_name = para.style.name or ""
+            if para.style and para.style.name:
+                style_name = para.style.name.strip().lower()
         except Exception:
-            pass
+            style_name = ""
 
-        if style_name.strip().lower() in ["article name", "articlename"]:
+        para_text = (para.text or "").strip()
+        if style_name in known_title_styles and para_text:
             format_article_title_paragraph(para)
             return True
 
-    # 2) Stil adı yakalanmazsa metne göre bul
+    # 2) Stil yakalanmazsa başlık metnini birebir ara
     if normalized_title:
-        for para in doc.paragraphs:
-            if (para.text or "").strip() == normalized_title:
+        for para in paragraphs:
+            para_text = (para.text or "").strip()
+            if para_text == normalized_title:
+                format_article_title_paragraph(para)
+                return True
+
+    # 3) Son çare: başlığın büyük kısmını içeren paragrafı bul
+    if normalized_title:
+        lowered = normalized_title.lower()
+        for para in paragraphs:
+            para_text = (para.text or "").strip().lower()
+            if para_text and (lowered in para_text or para_text in lowered):
                 format_article_title_paragraph(para)
                 return True
 
@@ -312,13 +348,14 @@ def append_body(target_doc, source_doc, skip_first_nonempty_paragraph=False):
 
         for run in para.runs:
             new_run = new_p.add_run(run.text)
-            new_run.bold = run.bold
-            new_run.italic = run.italic
-            new_run.underline = run.underline
-
-            font_name = run.font.name if run.font.name else "Times New Roman"
-            font_size = run.font.size.pt if run.font.size else None
-            set_run_font(new_run, font_name=font_name, font_size=font_size)
+            set_run_font(
+                new_run,
+                font_name=run.font.name if run.font.name else "Times New Roman",
+                font_size=run.font.size.pt if run.font.size else None,
+                bold=run.bold,
+                italic=run.italic,
+                underline=run.underline
+            )
 
         new_p.alignment = para.alignment
 
@@ -445,10 +482,7 @@ def index():
 
             final_doc = Document(output_path)
 
-            # Türkçe makalede ana başlık TR, İngilizce makalede EN
             article_title = title_tr if language == "tr" else title_en
-
-            # Yeni template'teki Article Name stilini zorla düzelt
             fix_template_title(final_doc, article_title)
 
             final_doc.add_page_break()
