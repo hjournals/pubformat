@@ -11,7 +11,11 @@ app = Flask(__name__)
 
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "outputs"
-TEMPLATE_FILE = "holistic template.docx"
+
+# ÖNEMLİ:
+# template.dotx yerine Word'de açıp .docx olarak kaydetmen daha güvenlidir.
+# Örneğin dosya adını "template.docx" yap.
+TEMPLATE_FILE = "template.docx"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
@@ -123,16 +127,10 @@ HTML_FORM = """
             <div class="tr-field">
                 <label for="title_tr">Türkçe Başlık</label>
                 <input type="text" name="title_tr" id="title_tr" class="tr-input">
-                <div class="hint">
-                    Başlığı özel isimler hariç yalnızca ilk harf büyük olacak şekilde girin.
-                </div>
             </div>
 
             <label for="title_en">English Title</label>
             <input type="text" name="title_en" id="title_en" required>
-            <div class="hint">
-                English title should also be entered in sentence case where appropriate.
-            </div>
         </div>
 
         <div class="section">
@@ -245,31 +243,64 @@ def set_run_font(run, font_name="Times New Roman", font_size=None, bold=None, it
     if italic is not None:
         run.italic = italic
 
-def add_article_title(doc, title_text):
-    p = doc.add_paragraph()
-    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+def format_article_title_paragraph(paragraph):
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
-    fmt = p.paragraph_format
-    fmt.space_before = Pt(0)
-    fmt.space_after = Pt(12)
+    fmt = paragraph.paragraph_format
     fmt.left_indent = Cm(0)
     fmt.right_indent = Cm(0)
     fmt.first_line_indent = Cm(0)
+    fmt.space_before = Pt(0)
+    fmt.space_after = Pt(12)
     fmt.line_spacing = 1
 
-    run = p.add_run(title_text.strip())
-    set_run_font(run, font_name="Times New Roman", font_size=16, bold=True)
+    if not paragraph.runs:
+        run = paragraph.add_run(paragraph.text)
+        set_run_font(run, font_name="Times New Roman", font_size=16, bold=True)
+        return
 
-def append_body(target_doc, source_doc, skip_first_paragraph=False):
-    paragraphs = source_doc.paragraphs
+    for run in paragraph.runs:
+        set_run_font(run, font_name="Times New Roman", font_size=16, bold=True)
 
-    if skip_first_paragraph and len(paragraphs) > 0:
-        paragraphs = paragraphs[1:]
+def fix_template_title(doc, article_title):
+    """
+    Yeni template'te başlık paragrafı Article Name / ArticleName stiliyle geliyor.
+    Önce stile göre bulur, gerekirse metne göre eşleştirir.
+    """
+    normalized_title = (article_title or "").strip()
 
-    for para in paragraphs:
-        if not para.text.strip() and not para.runs:
-            target_doc.add_paragraph()
-            continue
+    # 1) Önce stile göre yakala
+    for para in doc.paragraphs:
+        style_name = ""
+        try:
+            if para.style:
+                style_name = para.style.name or ""
+        except Exception:
+            pass
+
+        if style_name.strip().lower() in ["article name", "articlename"]:
+            format_article_title_paragraph(para)
+            return True
+
+    # 2) Stil adı yakalanmazsa metne göre bul
+    if normalized_title:
+        for para in doc.paragraphs:
+            if (para.text or "").strip() == normalized_title:
+                format_article_title_paragraph(para)
+                return True
+
+    return False
+
+def append_body(target_doc, source_doc, skip_first_nonempty_paragraph=False):
+    skipped = False
+
+    for para in source_doc.paragraphs:
+        para_text = (para.text or "").strip()
+
+        if skip_first_nonempty_paragraph and not skipped:
+            if para_text:
+                skipped = True
+                continue
 
         new_p = target_doc.add_paragraph()
 
@@ -414,17 +445,16 @@ def index():
 
             final_doc = Document(output_path)
 
-            # Gövde eklenmeden önce başlık sayfaya manuel olarak eklenir.
-            # Türkçe makalede ana başlık title_tr, İngilizce makalede title_en alınır.
+            # Türkçe makalede ana başlık TR, İngilizce makalede EN
             article_title = title_tr if language == "tr" else title_en
-            add_article_title(final_doc, article_title)
+
+            # Yeni template'teki Article Name stilini zorla düzelt
+            fix_template_title(final_doc, article_title)
 
             final_doc.add_page_break()
 
             body_doc = Document(body_path)
-
-            # Yüklenen ana metnin ilk paragrafı genellikle başlık olduğundan tekrar etmemesi için atlanır.
-            append_body(final_doc, body_doc, skip_first_paragraph=True)
+            append_body(final_doc, body_doc, skip_first_nonempty_paragraph=True)
 
             if ack:
                 final_doc.add_paragraph()
