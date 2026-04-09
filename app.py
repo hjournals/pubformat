@@ -3,7 +3,9 @@ from docxtpl import DocxTemplate
 from docx import Document
 from docx.shared import Cm, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
 import os
+import uuid
 
 app = Flask(__name__)
 
@@ -121,10 +123,16 @@ HTML_FORM = """
             <div class="tr-field">
                 <label for="title_tr">Türkçe Başlık</label>
                 <input type="text" name="title_tr" id="title_tr" class="tr-input">
+                <div class="hint">
+                    Başlığı özel isimler hariç yalnızca ilk harf büyük olacak şekilde girin.
+                </div>
             </div>
 
             <label for="title_en">English Title</label>
             <input type="text" name="title_en" id="title_en" required>
+            <div class="hint">
+                English title should also be entered in sentence case where appropriate.
+            </div>
         </div>
 
         <div class="section">
@@ -223,8 +231,46 @@ RESULT_HTML = """
 </html>
 """
 
-def append_body(target_doc, source_doc):
-    for para in source_doc.paragraphs:
+def set_run_font(run, font_name="Times New Roman", font_size=None, bold=None, italic=None):
+    run.font.name = font_name
+    run._element.rPr.rFonts.set(qn("w:ascii"), font_name)
+    run._element.rPr.rFonts.set(qn("w:hAnsi"), font_name)
+    run._element.rPr.rFonts.set(qn("w:eastAsia"), font_name)
+    run._element.rPr.rFonts.set(qn("w:cs"), font_name)
+
+    if font_size is not None:
+        run.font.size = Pt(font_size)
+    if bold is not None:
+        run.bold = bold
+    if italic is not None:
+        run.italic = italic
+
+def add_article_title(doc, title_text):
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    fmt = p.paragraph_format
+    fmt.space_before = Pt(0)
+    fmt.space_after = Pt(12)
+    fmt.left_indent = Cm(0)
+    fmt.right_indent = Cm(0)
+    fmt.first_line_indent = Cm(0)
+    fmt.line_spacing = 1
+
+    run = p.add_run(title_text.strip())
+    set_run_font(run, font_name="Times New Roman", font_size=16, bold=True)
+
+def append_body(target_doc, source_doc, skip_first_paragraph=False):
+    paragraphs = source_doc.paragraphs
+
+    if skip_first_paragraph and len(paragraphs) > 0:
+        paragraphs = paragraphs[1:]
+
+    for para in paragraphs:
+        if not para.text.strip() and not para.runs:
+            target_doc.add_paragraph()
+            continue
+
         new_p = target_doc.add_paragraph()
 
         try:
@@ -239,10 +285,9 @@ def append_body(target_doc, source_doc):
             new_run.italic = run.italic
             new_run.underline = run.underline
 
-            if run.font.name:
-                new_run.font.name = run.font.name
-            if run.font.size:
-                new_run.font.size = run.font.size
+            font_name = run.font.name if run.font.name else "Times New Roman"
+            font_size = run.font.size.pt if run.font.size else None
+            set_run_font(new_run, font_name=font_name, font_size=font_size)
 
         new_p.alignment = para.alignment
 
@@ -262,26 +307,48 @@ def clean_reference_lines(text):
 
 def add_heading(doc, text):
     p = doc.add_paragraph()
-    run = p.add_run(text)
-    run.bold = True
-    run.font.size = Pt(12)
     p.alignment = WD_ALIGN_PARAGRAPH.LEFT
 
+    run = p.add_run(text)
+    set_run_font(run, font_name="Times New Roman", font_size=12, bold=True)
+
+    fmt = p.paragraph_format
+    fmt.space_before = Pt(12)
+    fmt.space_after = Pt(6)
+    fmt.line_spacing = 1
+
 def add_normal_paragraph(doc, text):
-    p = doc.add_paragraph(text)
+    p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+    run = p.add_run(text)
+    set_run_font(run, font_name="Times New Roman", font_size=12)
+
+    fmt = p.paragraph_format
+    fmt.space_before = Pt(0)
+    fmt.space_after = Pt(6)
+    fmt.line_spacing = 1
+
     return p
 
 def add_reference_paragraph(doc, text):
-    p = doc.add_paragraph(text)
+    p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+    run = p.add_run(text)
+    set_run_font(run, font_name="Times New Roman", font_size=12)
+
     fmt = p.paragraph_format
     fmt.left_indent = Cm(1)
     fmt.first_line_indent = Cm(-1)
     fmt.space_before = Pt(6)
     fmt.space_after = Pt(6)
     fmt.line_spacing = 1
+
     return p
+
+def unique_filename(prefix="final", ext=".docx"):
+    return f"{prefix}_{uuid.uuid4().hex}{ext}"
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -322,10 +389,11 @@ def index():
             if not body_file or not body_file.filename.lower().endswith(".docx"):
                 return "Lütfen body için .docx dosyası yükleyin."
 
-            body_path = os.path.join(UPLOAD_FOLDER, body_file.filename)
+            body_filename = unique_filename(prefix="body", ext=".docx")
+            body_path = os.path.join(UPLOAD_FOLDER, body_filename)
             body_file.save(body_path)
 
-            output_file = "final.docx"
+            output_file = unique_filename(prefix="final", ext=".docx")
             output_path = os.path.join(OUTPUT_FOLDER, output_file)
 
             tpl = DocxTemplate(TEMPLATE_FILE)
@@ -346,9 +414,17 @@ def index():
 
             final_doc = Document(output_path)
 
+            # Gövde eklenmeden önce başlık sayfaya manuel olarak eklenir.
+            # Türkçe makalede ana başlık title_tr, İngilizce makalede title_en alınır.
+            article_title = title_tr if language == "tr" else title_en
+            add_article_title(final_doc, article_title)
+
             final_doc.add_page_break()
+
             body_doc = Document(body_path)
-            append_body(final_doc, body_doc)
+
+            # Yüklenen ana metnin ilk paragrafı genellikle başlık olduğundan tekrar etmemesi için atlanır.
+            append_body(final_doc, body_doc, skip_first_paragraph=True)
 
             if ack:
                 final_doc.add_paragraph()
