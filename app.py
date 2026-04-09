@@ -15,7 +15,7 @@ OUTPUT_FOLDER = "outputs"
 # ÖNEMLİ:
 # template.dotx yerine Word'de açıp .docx olarak kaydetmen daha güvenlidir.
 # Örneğin dosya adını "template.docx" yap.
-TEMPLATE_FILE = "template.docx"
+TEMPLATE_FILE = "TEMPLATE.docx"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
